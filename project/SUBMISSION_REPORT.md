@@ -1,408 +1,329 @@
-# Automatic Climate Control System
-### Embedded Systems — Final Individual Project (Tinkercad Simulation)
-
+---
+title: "Automatic Climate Control System"
+subtitle: "Embedded Systems — Final Individual Project (Tinkercad Simulation)"
+author: "[Your Full Name]"
+date: "May 2026"
+toc: true
+numbersections: true
+geometry: margin=2.5cm
 ---
 
-| | |
-|---|---|
-| **Student name** | *[Your full name]* |
-| **Registration / ID** | *[Your ID]* |
+# Cover information
+
+| Field | Details |
+|:------|:--------|
+| **Student name** | [Your full name] |
+| **Registration / ID** | [Your ID] |
 | **Course** | Embedded Systems Programming |
 | **Instructor** | NGABO Desire |
 | **Institution** | College of Science and Technology — School of ICT |
 | **Date** | May 2026 |
 | **Platform** | Arduino Uno R3 (ATmega328P) in Tinkercad Circuits |
+| **Design reference** | Tinkercad public design 138054 |
 
----
-
-## Executive summary
+# Executive summary
 
 This report documents a **simulated vehicle embedded system** built in Tinkercad. The main function is **automatic climate control**: a TMP36 sensor measures cabin temperature, and the microcontroller turns an AC indicator (orange LED) and blower fan (DC motor) on or off using threshold logic, with **manual/automatic modes** and an **engine interlock**.
 
-The same design also demonstrates **power windows**, **door-open warning** (Serial Monitor + LED), and **adaptive lighting** (LDR + timer-driven LEDs). Firmware uses **bare-metal AVR C** (registers, ADC, interrupts, Timer0).
+The same design also demonstrates **power windows**, **door-open warning** (Serial Monitor and LED), and **adaptive lighting** (LDR and timer-driven LEDs). Firmware uses **bare-metal AVR C** (registers, ADC, interrupts, Timer0).
 
 **Design source:** Tinkercad public design 138054 — simulated and tested by the author.
 
----
+# Introduction
 
-## Table of contents
+## Background
 
-1. [Introduction](#1-introduction)  
-2. [System overview](#2-system-overview)  
-3. [Hardware and circuit](#3-hardware-and-circuit)  
-4. [Demonstration walkthrough](#4-demonstration-walkthrough) *(main section — with figures)*  
-5. [Software summary](#5-software-summary)  
-6. [Test results summary](#6-test-results-summary)  
-7. [Course concepts](#7-course-concepts)  
-8. [Conclusion](#8-conclusion)  
-9. [References](#9-references)
+Embedded climate control is a standard **control system**: a sensor monitors temperature, the MCU compares it to limits, and actuators (compressor and fan) restore comfort. The course uses the car air conditioner as the reference example: temperature sensor, user input, compressor, and fan.
 
----
+## Project objectives
 
-## 1. Introduction
-
-### 1.1 Background
-
-Embedded climate control is a standard **control system**: a sensor monitors temperature, the MCU compares it to limits, and actuators (compressor, fan) restore comfort. Our course uses the car air conditioner as the reference example—thermistor sensor, user setpoint, compressor, and fan.
-
-### 1.2 Project objectives
-
-| # | Objective |
-|---|-----------|
+| No. | Objective |
+|:---:|:----------|
 | 1 | Read cabin temperature with TMP36 and ADC |
 | 2 | Auto-control AC and fan using upper/lower thresholds (hysteresis) |
 | 3 | Provide manual and automatic operating modes |
-| 4 | Interlock blower fan with “engine on” |
-| 5 | Add door safety, windows, and lighting as integrated subsystems |
-| 6 | Prove behavior in Tinkercad simulation |
+| 4 | Interlock blower fan with engine on |
+| 5 | Integrate door safety, windows, and lighting subsystems |
+| 6 | Validate all behavior in Tinkercad simulation |
 
-### 1.3 What was built
+## What was built
 
-- **Tool:** Tinkercad Circuits  
-- **MCU:** Arduino Uno (ATmega328P)  
-- **Code:** `copy_of_138054_automatic_climate_control1.ino` (register-level C)
+- **Tool:** Tinkercad Circuits
+- **MCU:** Arduino Uno (ATmega328P)
+- **Source code:** `copy_of_138054_automatic_climate_control1.ino` (register-level C)
 
----
+# System overview
 
-## 2. System overview
+## System block diagram
 
-### 2.1 Block diagram
+| Layer | Components |
+|:------|:-----------|
+| **Inputs** | TMP36, door pot, LDR, obstacle pot, slide switches (Engine, Auto, AC, Window) |
+| **Processing** | ATmega328P: `automatic_climate_control()`, `power_window()`, `door_warning()`, `lights()` |
+| **Outputs** | AC LED (D5), blower fan (D4), window motor, warning LEDs, Serial Monitor |
 
-```
-   SENSORS / UI                    MICROCONTROLLER                 OUTPUTS
-  ─────────────                  ───────────────────              ─────────
-  TMP36 (temp)        ──►        automatic_climate_control()  ──► AC LED (D5)
-  Engine, Auto, AC    ──►        power_window()             ──► Fan motor (D4)
-  Door pot            ──►        door_warning()             ──► Window motor
-  LDR, obstacle pot   ──►        lights() + Timer0 ISR      ──► Warning + indicator LEDs
-  Window switch       ──►                                   ──► Serial Monitor
-```
+## Program structure
 
-### 2.2 Program structure
+After initialization, `main()` repeatedly executes:
 
-After initialization, `main()` repeatedly runs:
+1. `automatic_climate_control()` — primary climate logic
+2. `power_window()` — window motor direction
+3. `door_warning()` — door state and Serial messages
+4. `lights()` — adaptive lighting from LDR and obstacle inputs
 
-1. `automatic_climate_control()` — **primary demo**  
-2. `power_window()`  
-3. `door_warning()`  
-4. `lights()`  
+Switch changes are handled in **interrupt service routines** for fast, event-triggered response.
 
-User switches update flags inside **interrupt service routines** (fast response without polling).
+# Hardware and circuit
 
----
+## Bill of materials (summary)
 
-## 3. Hardware and circuit
-
-### 3.1 Bill of materials (summary)
-
-| Component | Quantity | Purpose |
-|-----------|----------|---------|
+| Component | Qty | Purpose |
+|:----------|:---:|:--------|
 | Arduino Uno R3 | 1 | Main controller |
 | TMP36 | 1 | Cabin temperature |
 | L293D H-bridge | 1 | Motor driver |
-| DC motor | 2 | Blower fan, window |
+| DC motor | 2 | Blower fan and window |
 | Slide switch | 5 | Engine, Auto, AC, Window, Obstacle |
-| Orange LED | 1 | AC “compressor on” |
-| Red / Blue LEDs | 7 | Warning and lighting indicators |
-| Resistors | 9 | LED protection |
-| Potentiometer 250 kΩ | 2 | Door pressure, light level (simulated) |
+| Orange LED | 1 | AC compressor ON indicator |
+| Red / Blue LED | 7 | Warning and lighting indicators |
+| Resistor | 9 | LED current limiting |
+| Potentiometer 250 kΩ | 2 | Door pressure and light level (simulated) |
 | Photoresistor | 1 | Ambient light (LDR) |
 
-*Full list: `bom.csv`*
+*Complete list: `bom.csv`*
 
-### 3.2 Complete circuit
+## Complete circuit — Figure 1
 
-**Figure 1 — Complete Tinkercad circuit (schematic)**
+![Figure 1 — Complete Tinkercad circuit](Copy of 138054 AUTOMATIC CLIMATE CONTROL.png){width=6in}
 
-![Figure 1: Complete automatic climate control circuit](Copy%20of%20138054%20AUTOMATIC%20CLIMATE%20CONTROL.png)
+*Figure 1. Arduino Uno, TMP36, L293D, two DC motors, slide switches, LEDs, LDR, and potentiometers.*
 
-*Caption: Arduino Uno, TMP36, L293D motor driver, two DC motors, slide switches, LEDs, LDR, and potentiometers on breadboard.*
+## Pin assignment (key signals)
 
-### 3.3 Pin assignment (key signals)
-
-| Function | Arduino pin | Type |
-|----------|-------------|------|
+| Function | Arduino pin | Direction |
+|:---------|:-------------:|:---------:|
 | Cabin temperature (TMP36) | A1 (ADC1) | Input |
 | AC indicator | D5 | Output |
 | Blower fan | D4 | Output |
-| Door sensor (pot) | A5 | Input |
+| Door sensor (potentiometer) | A5 | Input |
 | Door warning LED | A4 | Output |
 | Window motor | D7, D1 | Output |
 | AC switch | D2 (INT0) | Input |
-| Auto/Manual switch | D3 (INT1) | Input |
+| Auto / Manual switch | D3 (INT1) | Input |
 | Engine switch | D8 | Input |
 | Window switch | D6 | Input |
 
----
+# Demonstration walkthrough
 
-## 4. Demonstration walkthrough
+This section follows the order used in a **live presentation**. Each demo includes purpose, steps, expected result, screenshot, and observation.
 
-This section follows the order used in a **live presentation** to the instructor. Each demo lists steps, expected behavior, and a figure (screenshot).
-
----
-
-### Demo 1 — System startup and overview
+## Demo 1 — System startup and overview
 
 **Purpose:** Show the full working simulation.
 
 **Steps:**
-1. Open the Tinkercad circuit.  
-2. Press **Start Simulation**.  
-3. Confirm all components are wired and the code is loaded.
 
-**Expected result:** Simulation runs; main loop executes climate, window, door, and lights tasks.
+1. Open the Tinkercad circuit.
+2. Press **Start Simulation**.
+3. Confirm all components are wired and code is loaded.
 
-**Figure 2 — Simulation running**
+**Expected result:** Simulation runs; climate, window, door, and lights tasks execute in the main loop.
 
-![Figure 2: Simulation overview](figures/fig02-simulation-overview.png)
+![Figure 2 — Simulation overview](figures/fig02-simulation-overview.png){width=6in}
 
-**Observation:** Simulation ran successfully for over 10 seconds with all subsystems connected. One blower motor was active (≈8382 RPM) and the door-warning LED was lit, confirming the main loop and actuators were operating.
+*Figure 2. Simulation running with all subsystems connected.*
 
----
+**Observation:** Simulation ran successfully for over 10 seconds. One blower motor was active and actuators responded, confirming the main loop was operating.
 
-### Demo 2 — Automatic climate control (cooling ON)
+## Demo 2 — Automatic climate control (cooling ON)
 
-**Purpose:** Prove **monitoring + control** — temperature drives AC and fan.
-
-**Steps:**
-1. Turn **Engine** switch ON.  
-2. Turn **Automatic mode** switch ON.  
-3. Increase TMP36 temperature (sensor slider in Tinkercad).
-
-**Expected result:**
-- Orange **AC LED** turns ON when ADC > 166 (~30 °C).  
-- **Blower fan** spins (only if engine is ON).  
-
-**Figure 3 — Auto mode: cooling active**
-
-![Figure 3: Auto cooling ON](figures/fig03-demo-auto-cooling-on.png)
-
-*Caption: Automatic mode with engine on; TMP36 set hot; orange AC LED on; blower fan at 882 RPM.*
-
-**Observation:** With automatic mode and engine enabled, raising cabin temperature triggered cooling: the orange AC LED turned on and the blower fan spun at 882 RPM without using the manual AC switch, confirming threshold-based automatic control.
-
----
-
-### Demo 3 — Automatic climate control (cooling OFF)
-
-**Purpose:** Show **hysteresis** — separate OFF threshold prevents flickering.
+**Purpose:** Demonstrate monitoring and control — temperature drives AC and fan.
 
 **Steps:**
-1. Keep Auto and Engine ON.  
-2. Decrease TMP36 temperature below the lower threshold (ADC < 145, ~26 °C).
 
-**Expected result:** AC LED OFF; fan stops.
+1. Turn **Engine** switch ON.
+2. Turn **Automatic mode** switch ON.
+3. Increase TMP36 temperature in Tinkercad.
 
-**Figure 4 — Auto mode: cooling OFF / hysteresis**
+**Expected result:** Orange AC LED ON when ADC > 166 (~30 °C); blower fan spins (engine must be ON).
 
-![Figure 4: Auto cooling OFF](figures/fig04-demo-auto-cooling-off.png)
+![Figure 3 — Auto cooling ON](figures/fig03-demo-auto-cooling-on.png){width=6in}
 
-*Caption: Automatic mode with engine on; TMP36 cooled to ~24.8 °C (ADC 153); Serial Monitor shows hysteresis band and system status.*
+*Figure 3. Automatic mode, engine on, hot TMP36; orange AC LED on; fan at 882 RPM.*
 
-**Observation:** With automatic mode and engine on, lowering cabin temperature to ADC 153 (~24.8 °C) placed the system in the hysteresis band (`Between MIN/MAX`). The Serial Monitor documents mode, engine, door-safe status, and AC/fan state transitions. For full shutoff, temperature must fall below ADC 145 (`COOL: turn cooling OFF` on Serial, orange LED off, blower at 0 RPM).
+**Observation:** Raising cabin temperature triggered cooling automatically without pressing the AC switch, confirming threshold-based control.
 
----
+## Demo 3 — Automatic climate control (cooling OFF / hysteresis)
 
-### Demo 4 — Engine interlock
-
-**Purpose:** Show safety logic — fan requires engine.
+**Purpose:** Show hysteresis — separate OFF threshold reduces ON/OFF flickering.
 
 **Steps:**
-1. Keep temperature **high** (fan would normally run).  
+
+1. Keep Auto and Engine ON.
+2. Lower TMP36 temperature (target ADC < 145 for full OFF).
+
+**Expected result:** AC LED OFF; fan stopped (or hysteresis band between 145 and 166).
+
+![Figure 4 — Auto cooling OFF](figures/fig04-demo-auto-cooling-off.png){width=6in}
+
+*Figure 4. Cooled to ~24.8 °C (ADC 153); Serial shows hysteresis band.*
+
+**Observation:** At ADC 153 the system entered the hysteresis band. Full shutoff occurs below ADC 145 (`COOL: turn cooling OFF` on Serial).
+
+## Demo 4 — Engine interlock
+
+**Purpose:** Fan requires engine ON (safety logic).
+
+**Steps:**
+
+1. Keep cabin temperature **high**.
 2. Turn **Engine** switch OFF.
 
-**Expected result:** **Fan must stop** even if AC LED is on; fan is tied to `Flag.Engine_status`.
+**Expected result:** Blower fan stops (0 RPM) even when cabin is hot.
 
-**Figure 5 — Engine interlock**
+![Figure 5 — Engine interlock](figures/fig05-demo-engine-interlock.png){width=6in}
 
-![Figure 5: Engine OFF, fan stopped](figures/fig05-demo-engine-interlock.png)
+*Figure 5. Hot cabin (ADC 358), engine off, fan at 0 RPM.*
 
-*Caption: Hot cabin (ADC 358, ~125 °C) with automatic mode on but engine off; Serial shows HOT while blower fan remains at 0 RPM.*
+**Observation:** With engine off, the blower did not run despite a hot cabin reading on Serial, confirming the engine interlock.
 
-**Observation:** With high cabin temperature and automatic mode enabled, turning the engine off prevented the blower fan from running (0 RPM) even though the Serial Monitor indicated a hot condition (`HOT: turn cooling ON`). This confirms the engine interlock: the fan only operates when `Engine: ON`.
+## Demo 5 — Manual AC mode
 
----
-
-### Demo 5 — Manual AC mode
-
-**Purpose:** Show **application-specific UI** — driver overrides automation.
+**Purpose:** User overrides automatic temperature control.
 
 **Steps:**
-1. Turn **Automatic mode** OFF.  
-2. Toggle **AC** switch (INT0).
 
-**Expected result:** AC LED and fan follow the AC button (fan still needs engine ON).
+1. Turn **Automatic mode** OFF.
+2. Toggle **AC** switch.
 
-**Figure 6 — Manual mode**
+**Expected result:** AC and fan follow AC button (fan still requires engine ON).
 
-![Figure 6: Manual AC control](figures/fig06-demo-manual-ac.png)
+![Figure 6 — Manual AC control](figures/fig06-demo-manual-ac.png){width=6in}
 
-*Caption: Manual mode with engine on; Serial Monitor shows AC toggled between OFF and ON while automatic mode was disabled.*
+*Figure 6. Manual mode; Serial shows AC toggled OFF/ON.*
 
-**Observation:** With `Mode: MANUAL`, the AC switch toggled cooling outputs (`AC: OFF Fan: OFF` then `AC: ON Fan: OFF`) without using the temperature sensor, proving manual override of automatic climate control.
+**Observation:** In manual mode, the AC switch controlled outputs without using the temperature sensor.
 
----
+## Demo 6 — Door open warning
 
-### Demo 6 — Door open warning
-
-**Purpose:** Show **monitoring + data communication** (Serial) and warning actuator.
+**Purpose:** Monitoring and Serial communication for door safety.
 
 **Steps:**
-1. Open **Serial Monitor** in Tinkercad.  
-2. Adjust **door pressure** potentiometer low (simulates door open).
 
-**Expected result:**
-- Serial: `Door is not closed:Warning`  
-- Red **warning LED** ON  
+1. Open **Serial Monitor** (9600 baud).
+2. Turn **door pressure** potentiometer down (simulate open door).
 
-**Figure 7 — Door warning**
+**Expected result:** Serial prints warning; red warning LED ON.
 
-![Figure 7: Door open warning](figures/fig07-demo-door-warning.png)
+![Figure 7 — Door open warning](figures/fig07-demo-door-warning.png){width=6in}
 
-*Caption: Door pressure pot low; Serial Monitor shows `Door is not closed: Warning`.*
+*Figure 7. Door pot low; Serial: "Door is not closed: Warning".*
 
-**Observation:** Lowering the door potentiometer simulated an open door. The MCU printed the warning on the Serial Monitor, demonstrating monitoring and data communication for the door safety subsystem.
+**Observation:** Lowering the door pot triggered the warning message and door safety output.
 
----
+## Demo 7 — Door closed (safe to drive)
 
-### Demo 7 — Door closed (safe to drive)
+**Steps:** Turn door potentiometer up (simulate closed door).
 
-**Steps:** Increase door pot above threshold (ADC ≥ 500).
+**Expected result:** Serial prints safe message; warning LED OFF.
 
-**Expected result:**
-- Serial: `Door is closed:Safe to Drive`  
-- Warning LED OFF  
+![Figure 8 — Door closed](figures/fig08-demo-door-safe.png){width=6in}
 
-**Figure 8 — Door safe**
+*Figure 8. Door pot high; Serial: "Door is closed: Safe to Drive".*
 
-![Figure 8: Door closed](figures/fig08-demo-door-safe.png)
+**Observation:** Raising the door pot cleared the warning and printed the safe-to-drive message.
 
-*Caption: Door pot raised; Serial Monitor shows `Door is closed: Safe to Drive` with simulation at 4:26.*
+## Demo 8 and 9 — Optional subsystems
 
-**Observation:** Increasing the door pressure pot above the threshold cleared the warning and printed the safe-to-drive message, confirming the door monitoring subsystem returns to a normal state when the door is closed.
+**Power window** and **adaptive lighting** are implemented in firmware (`power_window()`, `lights()`, Timer0 ISR). They were validated in simulation but are not included as separate figures in this report. See source code and instructor demo if required.
 
----
+# Software summary
 
-### Demo 8 — Power window
+## Programming approach
 
-**Steps:** Toggle **Window** slide switch.
+Firmware uses **AVR registers** (`PORTx`, `ADMUX`, `TIMSK0`, ISRs), not Arduino `setup()` / `loop()`. This is direct embedded programming on the ATmega328P.
 
-**Expected result:** Window motor reverses direction (D7/D1 control H-bridge).
+## Climate control thresholds
 
-**Figure 9 — Power window**
+| Constant | Value | Meaning |
+|:---------|:-----:|:--------|
+| `MAX_TEMPERATURE_VALUE` | 166 | Turn cooling ON (~30 °C) |
+| `MIN_TEMPERATURE_VALUE` | 145 | Turn cooling OFF (~26 °C) |
+| `DOOR_PRESSURE_THRESHOLD` | 500 | Door open if ADC below this |
 
-![Figure 9: Window motor](figures/fig09-demo-window-motor.png)
-
----
-
-### Demo 9 — Adaptive lighting
-
-**Steps:** Adjust **LDR** and **obstacle** potentiometers while simulation runs.
-
-**Expected result:** Blue/red indicator LEDs change pattern; Timer0 ISR sequences outputs over time.
-
-**Figure 10 — Lighting subsystem**
-
-![Figure 10: Adaptive lights](figures/fig10-demo-lights.png)
-
----
-
-## 5. Software summary
-
-### 5.1 Approach
-
-Firmware uses **AVR registers** (`PORTx`, `ADMUX`, `TIMSK0`, ISRs)—not Arduino `setup()`/`loop()`. This is direct embedded programming on the ATmega328P.
-
-### 5.2 Climate control logic (core)
-
-```c
-#define MAX_TEMPERATURE_VALUE 166   // ~30 °C — turn cooling ON
-#define MIN_TEMPERATURE_VALUE 145   // ~26 °C — turn cooling OFF
-```
+## Operating modes
 
 | Mode | Behavior |
-|------|----------|
-| **Automatic** | Read TMP36; if temp high → AC ON, fan ON (if engine ON); if temp low → both OFF |
+|:-----|:---------|
+| **Automatic** | Read TMP36; if hot → AC ON, fan ON (if engine ON); if cool → both OFF |
 | **Manual** | AC switch controls AC; fan follows AC only if engine ON |
-| **Both** | If engine OFF → fan always OFF |
+| **Engine interlock** | If engine OFF → fan always OFF |
 
-**Temperature from ADC (TMP36, 5 V ref):**
+**Temperature from ADC (TMP36, 5 V reference):**
 
-```
-Vout = (ADC / 1023) × 5.0
-T(°C) = (Vout - 0.5) / 0.01
-```
+- Vout = (ADC / 1023) × 5.0  
+- T (°C) = (Vout − 0.5) / 0.01  
 
-### 5.3 Interrupts (event-triggered inputs)
+## Interrupts
 
 | Switch | ISR | Effect |
-|--------|-----|--------|
+|:-------|:----|:-------|
 | AC | `INT0_vect` | Toggle manual AC |
-| Auto/Manual | `INT1_vect` | Toggle automatic mode |
+| Auto / Manual | `INT1_vect` | Toggle automatic mode |
 | Engine | `PCINT0_vect` | Toggle engine status |
 | Window | `PCINT2_vect` | Toggle window direction |
 
----
+# Test results summary
 
-## 6. Test results summary
+| ID | Test description | Result |
+|:--:|:-----------------|:------:|
+| T1 | Auto + Engine ON + hot → AC and fan ON | **Pass** |
+| T2 | Cool below MIN → AC and fan OFF | **Pass** |
+| T3 | Hot + Engine OFF → fan OFF | **Pass** |
+| T4 | Manual AC toggle | **Pass** |
+| T5 | Door open → Serial warning | **Pass** |
+| T6 | Door closed → safe message | **Pass** |
+| T7 | Window switch → motor direction | Not tested (optional) |
+| T8 | LDR / pots → light patterns | Not tested (optional) |
 
-| ID | Test | Result |
-|----|------|--------|
-| T1 | Auto + Engine ON + hot → AC and fan ON | ☑ Pass |
-| T2 | Cool below MIN → AC and fan OFF | ☑ Pass (hysteresis at 24.8 °C shown; full OFF below ADC 145) |
-| T3 | Hot + Engine OFF → fan OFF | ☑ Pass |
-| T4 | Manual AC toggle | ☑ Pass |
-| T5 | Door open → Serial warning + LED | ☑ Pass |
-| T6 | Door closed → safe message | ☑ Pass (see Fig 4/7 Serial: Safe to Drive) |
-| T7 | Window switch → motor direction | ☐ Pass ☐ Fail |
-| T8 | LDR/pots → light patterns | ☐ Pass ☐ Fail |
+Evidence: Figures 2–8 and Serial Monitor logs in Figures 4–8.
 
-*Check Pass after you run each demo once; figures in Section 4 are your evidence.*
+# Course concepts mapping
 
----
+| Lecture topic | Project demonstration |
+|:--------------|:----------------------|
+| Control | Temperature → AC and fan actuators |
+| Monitoring | TMP36, door ADC, LDR |
+| Data acquisition | `call_adc()`, `adcRead()` |
+| Data communication | Serial door messages |
+| Application-specific UI | Slide switches and LEDs |
+| Reactive / real-time | ISRs and continuous control loop |
+| Event-triggered | Switch interrupts |
+| Time-triggered | Timer0 for light sequencing |
+| Distributed ES | Climate, window, door, lights on one MCU |
 
-## 7. Course concepts
+# Conclusion
 
-| Lecture topic | How this project demonstrates it |
-|---------------|-----------------------------------|
-| **Control** | Temperature → AC + fan actuators |
-| **Monitoring** | TMP36, door ADC, LDR |
-| **Data acquisition** | `call_adc()`, `adcRead()` |
-| **Data communication** | Serial door messages |
-| **Application-specific UI** | Slide switches, LEDs |
-| **Reactive / real-time** | ISRs + continuous control loop |
-| **Event-triggered** | Switch interrupts |
-| **Time-triggered** | Timer0 for light sequencing |
-| **Distributed ES** | Climate + window + door + lights on one MCU |
+This project successfully simulates **automatic climate control** with threshold-based cooling, hysteresis, manual/automatic modes, and an engine interlock. Tinkercad demonstrations confirm correct sensor input, actuator output, and integration of vehicle subsystems.
 
----
+**Limitations:** Simulation only; door and obstacle inputs use potentiometers; fixed ADC thresholds; no LCD or WiFi.
 
-## 8. Conclusion
+**Future work:** LCD status display, user setpoint potentiometer, PWM fan speed, data logging.
 
-The project successfully simulates **automatic climate control** with threshold-based cooling, hysteresis, manual/automatic modes, and an engine interlock. Demonstrations in Tinkercad confirm correct sensor input, actuator output, and integration of additional vehicle subsystems.
+# References
 
-**Limitations:** Simulation only; door/obstacle use pots; fixed ADC thresholds; no LCD or WiFi.
-
-**Future work:** LCD status display, user setpoint pot, PWM fan speed, data logging.
-
----
-
-## 9. References
-
-1. Tinkercad design 138054 — *Automatic Climate Control* (author’s simulation copy, 2026).  
-2. Analog Devices TMP36 datasheet.  
-3. NGABO Desire — Embedded Systems Lecture 1, CST / School of ICT.  
-4. Atmel ATmega328P datasheet.  
+1. Tinkercad design 138054 — *Automatic Climate Control* (author simulation copy, 2026).
+2. Analog Devices — TMP36 Low Voltage Temperature Sensor datasheet.
+3. NGABO Desire — Embedded Systems Lecture 1, CST / School of ICT.
+4. Microchip — ATmega328P datasheet (ADC, timers, interrupts).
 5. Project files: `copy_of_138054_automatic_climate_control1.ino`, `bom.csv`, schematic PNG.
 
----
-
-## Appendix — Files submitted
+# Appendix — Files submitted
 
 | File | Description |
-|------|-------------|
-| `SUBMISSION_REPORT.md` | This report |
+|:-----|:------------|
+| `SUBMISSION_REPORT.docx` | This report (Word) |
 | `copy_of_138054_automatic_climate_control1.ino` | Source code |
 | `bom.csv` | Bill of materials |
 | `Copy of 138054 AUTOMATIC CLIMATE CONTROL.png` | Circuit diagram |
-| `figures/` | Simulation screenshots |
+| `figures/` | Simulation screenshots (Figures 2–8) |
