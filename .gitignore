@@ -3,3 +3,5 @@ Thumbs.db
 *.swp
 *~
 .cursor/
+# Local Tinkercad captures (canonical copies in project/figures/)
+/fig*.png
