@@ -222,13 +222,70 @@ uint16_t call_adc()
   return(ADC);
 }
 
+/* TMP36: 500 mV + 10 mV/°C, 5 V ADC reference */
+float adc_to_celsius(uint16_t adc)
+{
+  float v = (adc / 1023.0) * 5.0;
+  return (v - 0.5) / 0.01;
+}
+
+/* Log climate state when something changes (not every loop) */
+void log_climate_status(uint16_t cabin_adc, uint8_t ac_on, uint8_t fan_on)
+{
+  static uint8_t last_ac = 2, last_fan = 2, last_auto = 2, last_engine = 2;
+  static uint16_t last_adc = 0;
+
+  if (Flag.Automatic_mode != last_auto)
+  {
+    last_auto = Flag.Automatic_mode;
+    Serial.print(F("Mode: "));
+    Serial.println(last_auto ? F("AUTOMATIC") : F("MANUAL"));
+  }
+
+  if (Flag.Engine_status != last_engine)
+  {
+    last_engine = Flag.Engine_status;
+    Serial.print(F("Engine: "));
+    Serial.println(last_engine ? F("ON") : F("OFF"));
+  }
+
+  if (ac_on != last_ac || fan_on != last_fan)
+  {
+    last_ac = ac_on;
+    last_fan = fan_on;
+    Serial.print(F("AC: "));
+    Serial.print(ac_on ? F("ON") : F("OFF"));
+    Serial.print(F("  Fan: "));
+    Serial.println(fan_on ? F("ON") : F("OFF"));
+  }
+
+  if (Flag.Automatic_mode == ON)
+  {
+    if (cabin_adc > last_adc + 2 || cabin_adc + 2 < last_adc)
+    {
+      last_adc = cabin_adc;
+      Serial.print(F("Cabin ADC: "));
+      Serial.print(cabin_adc);
+      Serial.print(F("  (~"));
+      Serial.print(adc_to_celsius(cabin_adc), 1);
+      Serial.println(F(" C)"));
+      if (cabin_adc > MAX_TEMPERATURE_VALUE)
+        Serial.println(F("  -> HOT: turn cooling ON"));
+      else if (cabin_adc < MIN_TEMPERATURE_VALUE)
+        Serial.println(F("  -> COOL: turn cooling OFF"));
+      else
+        Serial.println(F("  -> Between MIN/MAX (hysteresis)"));
+    }
+  }
+}
+
 void initialize()
 {
   Flag.Engine_status=OFF;
   //Flag.Pressure_sensor=OFF;
   Flag.Automatic_mode=OFF;
   Flag.AC_button=OFF;
- // Serial.begin(9600);
+  Serial.begin(9600);
   
 }
 
@@ -274,6 +331,15 @@ void automatic_climate_control()
         if(Flag.Engine_status==OFF)
           CLR_BIT(PORTD,PORTD4);
       }
+
+      {
+        uint8_t ac_on = (PORTD & (1 << PORTD5)) ? 1 : 0;
+        uint8_t fan_on = (PORTD & (1 << PORTD4)) ? 1 : 0;
+        if (Flag.Automatic_mode == ON)
+          log_climate_status(cabin_temperature, ac_on, fan_on);
+        else
+          log_climate_status(0, ac_on, fan_on);
+      }
         
    // }
   /*  else
@@ -302,20 +368,25 @@ void power_window()
 
 void door_warning()
 {
+  static uint8_t last_door_open = 2;
   uint16_t door_sensor;
+  uint8_t door_open;
   ADMUX &= ~((1<<MUX3)|(1<<MUX1));
   ADMUX |= ((1<<MUX2)|(1<<MUX0));
   door_sensor=call_adc();
-  if(door_sensor<DOOR_PRESSURE_THRESHOLD)
-     {
-        Serial.println("Door is not closed:Warning");
-        SET_BIT(PORTC,PORTC4);
-     }
-      else
-      {
-        Serial.println("Door is closed:Safe to Drive");
-        CLR_BIT(PORTC,PORTC4);
-   	  }
+  door_open = (door_sensor < DOOR_PRESSURE_THRESHOLD) ? 1 : 0;
+  if (door_open != last_door_open)
+  {
+    last_door_open = door_open;
+    if (door_open)
+      Serial.println(F("Door is not closed: Warning"));
+    else
+      Serial.println(F("Door is closed: Safe to Drive"));
+  }
+  if (door_open)
+     SET_BIT(PORTC,PORTC4);
+  else
+     CLR_BIT(PORTC,PORTC4);
 }
 
 int main()
@@ -326,8 +397,10 @@ int main()
   set_pin();
   set_interrupt();
   set_timer();
- 
- 
+
+  Serial.println(F("=== Automatic Climate Control ==="));
+  Serial.println(F("Thresholds: ON if ADC>166, OFF if ADC<145"));
+  Serial.println(F("Engine ON required for fan. Toggle Auto for AUTO mode."));
   
   
   while(1)
