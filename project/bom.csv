@@ -1,0 +1,13 @@
+﻿Name,Quantity,Component
+"U1",1," Arduino Uno R3"
+"UCABIN TEMPERATURE",1," Temperature Sensor [TMP36]"
+"SENGINE SWITCH pb5, SAutomatic mode, SAc Switch, SWINDOW BUTTON, SOBSTACLE",5," Slideswitch"
+"DAC",1,"Orange LED"
+"R1, R2, R3, R4, R5, R6, R8, R9",8,"1 kΩ Resistor"
+"MBLOWER FAN, MWINDOW MOTOR",2," DC Motor"
+"U3",1," H-bridge Motor Driver"
+"DWARNING_LIGHT, D1, D2, D3",4,"Red LED"
+"RpotDOOR_PRESSURE_SENSOR, Rpot4",2,"250 kΩ Potentiometer"
+"D4, D5, D6",3,"Blue LED"
+"R7",1,"270 Ω Resistor"
+"R10",1," Photoresistor"
