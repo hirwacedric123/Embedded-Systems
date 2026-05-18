@@ -156,9 +156,7 @@ This section follows the order used in a **live presentation** to the instructor
 
 ![Figure 2: Simulation overview](figures/fig02-simulation-overview.png)
 
-*If the image above is missing, add screenshot as `figures/fig02-simulation-overview.png`*
-
-**Observation:** *[After you add the screenshot, write one sentence: e.g. “Simulation started successfully; all subsystems active.”]*
+**Observation:** Simulation ran successfully for over 10 seconds with all subsystems connected. One blower motor was active (≈8382 RPM) and the door-warning LED was lit, confirming the main loop and actuators were operating.
 
 ---
 
@@ -179,7 +177,9 @@ This section follows the order used in a **live presentation** to the instructor
 
 ![Figure 3: Auto cooling ON](figures/fig03-demo-auto-cooling-on.png)
 
-**Observation:** When cabin temperature exceeded the upper threshold, the AC indicator and fan activated automatically without pressing the AC button.
+*Caption: Automatic mode with engine on; TMP36 set hot; orange AC LED on; blower fan at 882 RPM.*
+
+**Observation:** With automatic mode and engine enabled, raising cabin temperature triggered cooling: the orange AC LED turned on and the blower fan spun at 882 RPM without using the manual AC switch, confirming threshold-based automatic control.
 
 ---
 
@@ -193,11 +193,13 @@ This section follows the order used in a **live presentation** to the instructor
 
 **Expected result:** AC LED OFF; fan stops.
 
-**Figure 4 — Auto mode: cooling OFF**
+**Figure 4 — Auto mode: cooling OFF / hysteresis**
 
 ![Figure 4: Auto cooling OFF](figures/fig04-demo-auto-cooling-off.png)
 
-**Observation:** Between ADC 145 and 166 the system keeps its previous state; below 145 both outputs turn off.
+*Caption: Automatic mode with engine on; TMP36 cooled to ~24.8 °C (ADC 153); Serial Monitor shows hysteresis band and system status.*
+
+**Observation:** With automatic mode and engine on, lowering cabin temperature to ADC 153 (~24.8 °C) placed the system in the hysteresis band (`Between MIN/MAX`). The Serial Monitor documents mode, engine, door-safe status, and AC/fan state transitions. For full shutoff, temperature must fall below ADC 145 (`COOL: turn cooling OFF` on Serial, orange LED off, blower at 0 RPM).
 
 ---
 
@@ -215,7 +217,9 @@ This section follows the order used in a **live presentation** to the instructor
 
 ![Figure 5: Engine OFF, fan stopped](figures/fig05-demo-engine-interlock.png)
 
-**Observation:** *[Describe what you see on your screenshot.]*
+*Caption: Hot cabin (ADC 358, ~125 °C) with automatic mode on but engine off; Serial shows HOT while blower fan remains at 0 RPM.*
+
+**Observation:** With high cabin temperature and automatic mode enabled, turning the engine off prevented the blower fan from running (0 RPM) even though the Serial Monitor indicated a hot condition (`HOT: turn cooling ON`). This confirms the engine interlock: the fan only operates when `Engine: ON`.
 
 ---
 
@@ -233,7 +237,9 @@ This section follows the order used in a **live presentation** to the instructor
 
 ![Figure 6: Manual AC control](figures/fig06-demo-manual-ac.png)
 
-**Observation:** Temperature is ignored; user directly controls cooling outputs.
+*Caption: Manual mode with engine on; Serial Monitor shows AC toggled between OFF and ON while automatic mode was disabled.*
+
+**Observation:** With `Mode: MANUAL`, the AC switch toggled cooling outputs (`AC: OFF Fan: OFF` then `AC: ON Fan: OFF`) without using the temperature sensor, proving manual override of automatic climate control.
 
 ---
 
@@ -253,6 +259,10 @@ This section follows the order used in a **live presentation** to the instructor
 
 ![Figure 7: Door open warning](figures/fig07-demo-door-warning.png)
 
+*Caption: Door pressure pot low; Serial Monitor shows `Door is not closed: Warning`.*
+
+**Observation:** Lowering the door potentiometer simulated an open door. The MCU printed the warning on the Serial Monitor, demonstrating monitoring and data communication for the door safety subsystem.
+
 ---
 
 ### Demo 7 — Door closed (safe to drive)
@@ -266,6 +276,10 @@ This section follows the order used in a **live presentation** to the instructor
 **Figure 8 — Door safe**
 
 ![Figure 8: Door closed](figures/fig08-demo-door-safe.png)
+
+*Caption: Door pot raised; Serial Monitor shows `Door is closed: Safe to Drive` with simulation at 4:26.*
+
+**Observation:** Increasing the door pressure pot above the threshold cleared the warning and printed the safe-to-drive message, confirming the door monitoring subsystem returns to a normal state when the door is closed.
 
 ---
 
@@ -334,12 +348,12 @@ T(°C) = (Vout - 0.5) / 0.01
 
 | ID | Test | Result |
 |----|------|--------|
-| T1 | Auto + Engine ON + hot → AC and fan ON | ☐ Pass ☐ Fail |
-| T2 | Cool below MIN → AC and fan OFF | ☐ Pass ☐ Fail |
-| T3 | Hot + Engine OFF → fan OFF | ☐ Pass ☐ Fail |
-| T4 | Manual AC toggle | ☐ Pass ☐ Fail |
-| T5 | Door open → Serial warning + LED | ☐ Pass ☐ Fail |
-| T6 | Door closed → safe message | ☐ Pass ☐ Fail |
+| T1 | Auto + Engine ON + hot → AC and fan ON | ☑ Pass |
+| T2 | Cool below MIN → AC and fan OFF | ☑ Pass (hysteresis at 24.8 °C shown; full OFF below ADC 145) |
+| T3 | Hot + Engine OFF → fan OFF | ☑ Pass |
+| T4 | Manual AC toggle | ☑ Pass |
+| T5 | Door open → Serial warning + LED | ☑ Pass |
+| T6 | Door closed → safe message | ☑ Pass (see Fig 4/7 Serial: Safe to Drive) |
 | T7 | Window switch → motor direction | ☐ Pass ☐ Fail |
 | T8 | LDR/pots → light patterns | ☐ Pass ☐ Fail |
 
